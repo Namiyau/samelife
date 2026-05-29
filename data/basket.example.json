@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "samelife-basket-v1",
+  "datasetId": "tokyo-beijing-2026-05-sample",
+  "updatedAt": "2026-05-29",
+  "baseCities": ["tokyo", "beijing"],
+  "notes": "示例数据文件：未来可由 AI 辅助整理后，人工审核，再放入项目读取。",
+  "items": [
+    {
+      "id": "coffee",
+      "category": "food",
+      "name": "咖啡",
+      "unit": "1杯",
+      "defaultMonthlyFrequency": 12,
+      "prices": {
+        "tokyo": [
+          {
+            "sourceId": "starbucks_jp_sample_2026_05",
+            "price": 450,
+            "currency": "JPY",
+            "sourceType": "company_public_price",
+            "sourceName": "Starbucks Japan",
+            "sourceUrl": "https://www.starbucks.co.jp/",
+            "sourceDate": "2026-05",
+            "confidence": "market_sample",
+            "methodNote": "公开菜单样本；非促销价；未来需补充具体商品口径。"
+          }
+        ],
+        "beijing": [
+          {
+            "sourceId": "starbucks_cn_sample_2026_05",
+            "price": 28,
+            "currency": "CNY",
+            "sourceType": "company_public_price",
+            "sourceName": "Starbucks China",
+            "sourceUrl": "https://www.starbucks.com.cn/",
+            "sourceDate": "2026-05",
+            "confidence": "market_sample",
+            "methodNote": "公开菜单样本；非促销价；未来需补充具体商品口径。"
+          }
+        ]
+      }
+    }
+  ]
+}
