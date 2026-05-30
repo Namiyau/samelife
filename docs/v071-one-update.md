@@ -18,12 +18,9 @@
 Settings → Pages：
 
 ```txt
-Source: GitHub Actions
-
-每次 push 到 main 后，GitHub Actions 会自动构建并发布。
-访问地址：
-
-https://namiyau.github.io/samelife/
+Source: Deploy from a branch
+Branch: main
+Folder: /docs
 ```
 
 保存后等待 1–3 分钟访问：

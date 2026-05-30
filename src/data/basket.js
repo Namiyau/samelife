@@ -39,7 +39,7 @@ export const CATEGORY_META = {
   },
   entertainment: {
     label: "娱乐",
-    desc: "电影、健身、流媒体、展览、活动、数字内容"
+    desc: "电影、健身、流媒体、展览、KTV、Live演出、数字内容"
   },
   daily: {
     label: "日用品",
@@ -294,14 +294,26 @@ export const BASKET_ITEMS = [
     tokyo: cityPrice(1200, "JPY", "占位：展览/博物馆门票样本", "https://www.tnm.jp/"),
     beijing: cityPrice(60, "CNY", "占位：展览/博物馆门票样本", "https://www.dpm.org.cn/")
   },
+
   {
-    id: "ktv_live_event",
+    id: "ktv",
     category: "entertainment",
-    name: "KTV/Live/活动",
-    unit: "1次",
+    name: "KTV",
+    unit: "人均/2小时",
+    note: "量贩式KTV，小包或6人内包房；北京按包房总价折算人均，东京按个人计费折算。",
     defaultMonthlyFrequency: 1,
-    tokyo: cityPrice(3500, "JPY", "占位：KTV/Live/活动样本", SOURCE_PLACEHOLDER.tokyo.entertainment),
-    beijing: cityPrice(180, "CNY", "占位：KTV/Live/活动样本", SOURCE_PLACEHOLDER.beijing.entertainment)
+    tokyo: cityPrice(1400, "JPY", "占位：KTV样本", SOURCE_PLACEHOLDER.tokyo.entertainment),
+    beijing: cityPrice(30, "CNY", "占位：KTV样本", SOURCE_PLACEHOLDER.beijing.entertainment)
+  },
+  {
+    id: "live_event",
+    category: "entertainment",
+    name: "Live/演出活动",
+    unit: "人均/次",
+    note: "普通Livehouse或普通演出票，不含VIP、黄牛价、大型顶流演唱会。",
+    defaultMonthlyFrequency: 1,
+    tokyo: cityPrice(3000, "JPY", "占位：Live/演出票样本", SOURCE_PLACEHOLDER.tokyo.entertainment),
+    beijing: cityPrice(180, "CNY", "占位：Live/演出票样本", SOURCE_PLACEHOLDER.beijing.entertainment)
   },
   {
     id: "game_digital_content",

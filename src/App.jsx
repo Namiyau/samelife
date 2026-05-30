@@ -6,8 +6,6 @@ import {
   CITIES,
   CURRENCIES
 } from "./data/basket";
-import foodDataset from "./data/2026_06_food.json";
-import nonFoodDataset from "./data/2026_06_non_food.json";
 import {
   FALLBACK_RATES,
   convertCurrency,
@@ -15,14 +13,65 @@ import {
   formatMoney
 } from "./lib/currency";
 
+const foodDataModules = import.meta.glob("./data/*_food.json", { eager: true, import: "default" });
+const nonFoodDataModules = import.meta.glob("./data/*_non_food.json", { eager: true, import: "default" });
+
+function parseDatasetFilePath(path, expectedType) {
+  const fileName = path.split("/").pop();
+  const match = fileName?.match(/^(\d{4})_(\d{2})(?:_(\d{2}))?_(food|non_food)\.json$/);
+  if (!match || match[4] !== expectedType) return null;
+
+  const [, year, month, dayRaw, type] = match;
+  const day = dayRaw || "00";
+  return {
+    fileName,
+    type,
+    year,
+    month,
+    day,
+    sortKey: `${year}${month}${day}`,
+    displayDate: dayRaw ? `${year}-${month}-${dayRaw}` : `${year}-${month}`
+  };
+}
+
+function pickLatestDataset(modules, expectedType) {
+  const entries = Object.entries(modules)
+    .map(([path, dataset]) => ({ path, dataset, meta: parseDatasetFilePath(path, expectedType) }))
+    .filter((entry) => entry.meta)
+    .sort((a, b) => a.meta.sortKey.localeCompare(b.meta.sortKey));
+
+  const latest = entries[entries.length - 1];
+
+  if (!latest) {
+    throw new Error(`No ${expectedType} dataset files found.`);
+  }
+
+  return {
+    ...latest,
+    dataset: {
+      ...latest.dataset,
+      datasetFileName: latest.dataset.datasetFileName || latest.meta.fileName,
+      fileDate: latest.meta.displayDate
+    }
+  };
+}
+
+const foodDatasetEntry = pickLatestDataset(foodDataModules, "food");
+const nonFoodDatasetEntry = pickLatestDataset(nonFoodDataModules, "non_food");
+const foodDataset = foodDatasetEntry.dataset;
+const nonFoodDataset = nonFoodDatasetEntry.dataset;
+const DATASET_FILE_SUMMARY = `${foodDatasetEntry.meta.fileName} + ${nonFoodDatasetEntry.meta.fileName}`;
+const DATASET_UPDATE_LABEL = [foodDataset.fileDate, nonFoodDataset.fileDate].sort().at(-1);
+
+
 const DEFAULT_SELECTED_CATEGORIES = Object.keys(CATEGORY_META);
 
 const DATA_SOURCES = {
   sl_official: {
     label: "SL官方",
     labelJa: "SL公式",
-    desc: "使用SL官方测定的数据，其最新更新日期为2026-06，仅统计公开信息，不考虑常驻优惠，实际体验等情况。",
-    descJa: "SL公式データを使用しています。最終更新日は2026-06です。公開情報のみを集計し、常設割引や実体験価格などは考慮していません。"
+    desc: `使用SL官方测定的数据，其最新更新日期为${DATASET_UPDATE_LABEL}，仅统计公开信息，不考虑常驻优惠、实际体验等情况。`,
+    descJa: `SL公式データを使用しています。最終更新日は${DATASET_UPDATE_LABEL}です。公開情報のみを集計し、常設割引や実体験価格などは考慮していません。`
   },
   sl_comprehensive: {
     label: "SL综合（待接入）",
@@ -79,7 +128,8 @@ const I18N = {
     sourceTitle: "选择本次计算使用的数据口径",
     sourceVersion: "数据源版本",
     sourcePending: "该数据源尚未接入。当前测试版只开放 SL官方口径。",
-    sourceReadyPrefix: "数据已接入：2026_06_food.json + 2026_06_non_food.json，当前口径已匹配",
+    sourceReadyPrefix: "数据已自动识别并接入：",
+    sourceReadyMiddle: "，当前口径已匹配",
     sourceReadySuffix: "个小项。",
     emptyCategory: "你还没有勾选任何类别。请至少选择一个类别。",
     totalItems: "个小项",
@@ -90,7 +140,7 @@ const I18N = {
     sourcePendingButton: "该数据源待接入",
     resultEyebrow: "计算结果",
     resultTitle: "你的 SameLife 月度生活成本结果",
-    resultHint: "当前结果基于你选择的类别、输入频率、当前汇率和数据源计算。数据读取 2026_06_food.json 与 2026_06_non_food.json。",
+    resultHint: "当前结果基于你选择的类别、输入频率、当前汇率和数据源计算。数据文件会按 年_月_日_food.json 与 年_月_日_non_food.json 自动识别最新版。",
     currentCost: "当前地区成本",
     targetCost: "目标地区成本",
     costRatio: "成本倍数",
@@ -107,7 +157,10 @@ const I18N = {
     currentUnitPrice: "单价",
     sourceReliability: "来源可信度",
     chartPlaceholder: "统计对比图",
-    chartPlaceholderBody: "预留：未来可加入总成本柱状图、分类成本对比、差异最大的前 5 个项目。",
+    chartPlaceholderBody: "按人民币统一折算后展示总额、分类占比和差异最大的项目。",
+    chartTotalComparison: "总成本对比",
+    chartCategoryComparison: "分类成本对比",
+    chartTopGap: "差异最大的项目",
     advicePlaceholder: "生活建议",
     advicePlaceholderBody: "预留：未来可根据成本差异生成节省建议、迁居提醒、消费结构提示。",
     downloadPdf: "下载 PDF（预留）",
@@ -118,6 +171,11 @@ const I18N = {
     sourceName: "来源名称",
     dataDate: "数据日期",
     dataNote: "数据说明：",
+    measurementSpec: "采样口径",
+    specScenario: "消费场景",
+    specInclude: "包含",
+    specExclude: "不包含",
+    specNormalization: "折算规则",
     summarySamples: "summary 样本数：",
     summaryMethod: "summary 计算方法：",
     sampleStats: "样本统计：",
@@ -182,7 +240,8 @@ const I18N = {
     sourceTitle: "今回の計算に使うデータ口径を選択",
     sourceVersion: "データバージョン",
     sourcePending: "このデータソースはまだ接続されていません。現在のテスト版ではSL公式のみ利用できます。",
-    sourceReadyPrefix: "データ読み込み済み：2026_06_food.json + 2026_06_non_food.json。現在の口径で",
+    sourceReadyPrefix: "データを自動識別して読み込み済み：",
+    sourceReadyMiddle: "。現在の口径で",
     sourceReadySuffix: "項目が一致しました。",
     emptyCategory: "カテゴリが選択されていません。少なくとも一つ選んでください。",
     totalItems: "項目",
@@ -193,7 +252,7 @@ const I18N = {
     sourcePendingButton: "このデータソースは準備中",
     resultEyebrow: "計算結果",
     resultTitle: "SameLife 月間生活費の結果",
-    resultHint: "結果は選択カテゴリ、入力頻度、為替レート、データソースに基づきます。データは 2026_06_food.json と 2026_06_non_food.json から読み込みます。",
+    resultHint: "結果は選択カテゴリ、入力頻度、為替レート、データソースに基づきます。データファイルは 年_月_日_food.json と 年_月_日_non_food.json から最新版を自動識別します。",
     currentCost: "現在都市のコスト",
     targetCost: "比較先都市のコスト",
     costRatio: "コスト倍率",
@@ -210,7 +269,10 @@ const I18N = {
     currentUnitPrice: "単価",
     sourceReliability: "出典信頼度",
     chartPlaceholder: "統計比較グラフ",
-    chartPlaceholderBody: "将来：総コストの棒グラフ、カテゴリ別比較、差が大きい上位5項目などを追加予定。",
+    chartPlaceholderBody: "人民元換算で総額、カテゴリ別構成、差が大きい項目を表示します。",
+    chartTotalComparison: "総コスト比較",
+    chartCategoryComparison: "カテゴリ別比較",
+    chartTopGap: "差が大きい項目",
     advicePlaceholder: "生活アドバイス",
     advicePlaceholderBody: "将来：コスト差に基づく節約提案、移住時の注意、消費構造のヒントなどを追加予定。",
     downloadPdf: "PDFダウンロード（準備中）",
@@ -221,6 +283,11 @@ const I18N = {
     sourceName: "出典名",
     dataDate: "データ日付",
     dataNote: "データ説明：",
+    measurementSpec: "採样口径",
+    specScenario: "消費シーン",
+    specInclude: "含む",
+    specExclude: "含まない",
+    specNormalization: "換算ルール",
     summarySamples: "summary サンプル数：",
     summaryMethod: "summary 計算方法：",
     sampleStats: "サンプル統計：",
@@ -253,7 +320,7 @@ const JA_CATEGORY_META = {
   food: { label: "食費", desc: "自炊、惣菜・即食、デリバリー、ファストフード、会食、カフェ・茶飲料、スイーツ" },
   transport: { label: "交通", desc: "地下鉄・電車、バス、タクシー、通勤定期、シェア自転車" },
   housing: { label: "住居", desc: "家賃、光熱費、インターネット、携帯、管理費" },
-  entertainment: { label: "娯楽", desc: "映画、ジム、配信サービス、展示、イベント、デジタルコンテンツ" },
+  entertainment: { label: "娯楽", desc: "映画、ジム、配信サービス、展示、KTV、Live演出、デジタルコンテンツ" },
   daily: { label: "日用品", desc: "洗面用品、紙製品、清掃用品、スキンケア、散髪、常備薬" }
 };
 
@@ -280,7 +347,8 @@ const JA_ITEM_TEXT = {
   gym: { name: "ジム", unit: "月額" },
   streaming: { name: "動画配信", unit: "月額" },
   museum_exhibition: { name: "博物館・展示", unit: "1回" },
-  ktv_live_event: { name: "KTV/ライブ/イベント", unit: "1回" },
+  ktv: { name: "KTV", unit: "1人/2時間", note: "量販式KTVまたは個人課金のカラオケ。北京は部屋料金を人数で割り、東京は個人料金を2時間に換算します。" },
+  live_event: { name: "Live/演出", unit: "1人/回", note: "普通チケットのみ。VIP、転売価格、大型トップアーティストの公演は除外します。" },
   game_digital_content: { name: "ゲーム/デジタルコンテンツ", unit: "1回" },
   shampoo_bodywash: { name: "シャンプー/ボディソープ", unit: "1セット" },
   tissue_toilet_paper: { name: "ティッシュ/トイレットペーパー", unit: "1セット" },
@@ -361,7 +429,8 @@ function normalizeDataset(dataset, datasetType) {
   return {
     ...dataset,
     datasetType,
-    displayName: dataset.displayName || dataset.datasetId
+    displayName: dataset.displayName || dataset.datasetId,
+    measurementSpecs: dataset.measurementSpecs || {}
   };
 }
 
@@ -393,7 +462,9 @@ function buildDatasetIndex(datasets) {
         datasetId: dataset.datasetId,
         datasetType: dataset.datasetType,
         datasetDisplayName: dataset.displayName,
-        samples: sampleIndex.get(key) || []
+        samples: sampleIndex.get(key) || [],
+        measurementSpec: dataset.measurementSpecs?.[summary.itemId] || null,
+        datasetFileName: dataset.datasetFileName
       });
     });
   });
@@ -428,7 +499,9 @@ function resolveDatasetPrice(item, city, sourceMode) {
     reliabilityScore: score,
     samples: summary.samples || [],
     summary,
-    datasetType: summary.datasetType
+    measurementSpec: summary.measurementSpec || null,
+    datasetType: summary.datasetType,
+    datasetFileName: summary.datasetFileName
   };
 }
 
@@ -461,6 +534,24 @@ function sanitizeDisplayText(value) {
     .replaceAll("user_filled", "manual_entry");
 }
 
+
+function safeSourceUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  const normalized = url.trim();
+  if (!/^https?:\/\//i.test(normalized)) return "";
+  const blocked = [
+    "mtr.bj.cn/en/service/ticket.html"
+  ];
+  if (blocked.some((fragment) => normalized.includes(fragment))) return "";
+  return normalized;
+}
+
+function arrayText(value) {
+  if (!value) return "";
+  if (Array.isArray(value)) return value.join("、");
+  return String(value);
+}
+
 function sourceKindLabel(kind) {
   const map = {
     official_menu: "官方菜单",
@@ -468,18 +559,26 @@ function sourceKindLabel(kind) {
     official_delivery_menu: "官方外送菜单",
     official_course_page: "官方套餐页",
     official_verified: "官方核验",
+    official_calculation: "官方规则计算",
+    official_rate_calculation: "官方费率计算",
+    official_verified_web_confirmed: "官方网页核验",
+    public_price: "公开价格",
+    public_plan: "公开套餐",
+    public_listing: "公开列表",
+    public_ticket_price_web_checked: "公开票价",
+    public_price_web_checked: "公开票价",
     platform_product_page: "平台商品页",
     platform_store_page: "平台店铺页",
     platform_course_page: "平台套餐页",
+    platform_dynamic_multi_source_corroborated: "平台动态价",
     app_price: "App价格",
     app_checkout: "App结算价",
     manual_entry_range: "手动计入",
     manual_entry_app_price: "手动计入",
     manual_entry_checkout_range: "手动计入",
-    manual_entry_range: "手动计入",
-    manual_entry_app_price: "手动计入",
-    manual_entry_checkout_range: "手动计入",
-    manual_entry_app_or_store_price: "手动计入"
+    manual_entry_app_or_store_price: "手动计入",
+    manual_platform_price_user_supplied: "手动计入",
+    manual_platform_price_user_supplied_web_corroborated: "手动计入"
   };
   return map[kind] || sanitizeDisplayText(kind || "样本信息");
 }
@@ -578,6 +677,44 @@ function calculateCityNativeTotal(city, items, frequencies) {
   }, 0);
 }
 
+
+function calculateItemMonthlyNative(city, item, frequencies) {
+  const frequency = Number(frequencies[item.id]) || 0;
+  const price = item[city]?.price || 0;
+  return price * frequency;
+}
+
+function buildCategoryComparisonRows(categoryOrder, groupedItems, currentCity, targetCity, frequencies, rates) {
+  return categoryOrder.map((category) => {
+    const items = groupedItems[category] || [];
+    const currentNative = calculateCityNativeTotal(currentCity, items, frequencies);
+    const targetNative = calculateCityNativeTotal(targetCity, items, frequencies);
+    const currentCny = convertCurrency(currentNative, CITIES[currentCity].nativeCurrency, "CNY", rates);
+    const targetCny = convertCurrency(targetNative, CITIES[targetCity].nativeCurrency, "CNY", rates);
+    return {
+      category,
+      currentCny,
+      targetCny,
+      maxCny: Math.max(currentCny, targetCny)
+    };
+  }).filter((row) => row.maxCny > 0);
+}
+
+function buildTopGapRows(items, currentCity, targetCity, frequencies, rates) {
+  return items.map((item) => {
+    const currentNative = calculateItemMonthlyNative(currentCity, item, frequencies);
+    const targetNative = calculateItemMonthlyNative(targetCity, item, frequencies);
+    const currentCny = convertCurrency(currentNative, CITIES[currentCity].nativeCurrency, "CNY", rates);
+    const targetCny = convertCurrency(targetNative, CITIES[targetCity].nativeCurrency, "CNY", rates);
+    return {
+      item,
+      currentCny,
+      targetCny,
+      gap: Math.abs(currentCny - targetCny)
+    };
+  }).filter((row) => row.gap > 0).sort((a, b) => b.gap - a.gap).slice(0, 5);
+}
+
 function DetailModal({ item, city, language, onClose }) {
   if (!item || !city) return null;
 
@@ -637,6 +774,29 @@ function DetailModal({ item, city, language, onClose }) {
           )}
         </div>
 
+        {cityPrice.measurementSpec && (
+          <div className="spec-card">
+            <div className="sample-section-head">
+              <h4>{t(language, "measurementSpec")}</h4>
+              <span>{cityPrice.measurementSpec.standardUnit || text.unit}</span>
+            </div>
+            <div className="spec-grid">
+              {cityPrice.measurementSpec.scenario && (
+                <div><strong>{t(language, "specScenario")}</strong><p>{sanitizeDisplayText(cityPrice.measurementSpec.scenario)}</p></div>
+              )}
+              {cityPrice.measurementSpec.include && (
+                <div><strong>{t(language, "specInclude")}</strong><p>{sanitizeDisplayText(arrayText(cityPrice.measurementSpec.include))}</p></div>
+              )}
+              {cityPrice.measurementSpec.exclude && (
+                <div><strong>{t(language, "specExclude")}</strong><p>{sanitizeDisplayText(arrayText(cityPrice.measurementSpec.exclude))}</p></div>
+              )}
+              {cityPrice.measurementSpec.normalization && (
+                <div><strong>{t(language, "specNormalization")}</strong><p>{sanitizeDisplayText(cityPrice.measurementSpec.normalization)}</p></div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="sample-section">
           <div className="sample-section-head">
             <h4>{t(language, "originalSamples")}</h4>
@@ -667,8 +827,8 @@ function DetailModal({ item, city, language, onClose }) {
                       </td>
                       <td>{formatMoney(sample.price, sample.currency)}</td>
                       <td>
-                        {sample.sourceUrl ? (
-                          <a href={sample.sourceUrl} target="_blank" rel="noreferrer">{sanitizeDisplayText(sample.sourceName)}</a>
+                        {safeSourceUrl(sample.sourceUrl) ? (
+                          <a href={safeSourceUrl(sample.sourceUrl)} target="_blank" rel="noreferrer">{sanitizeDisplayText(sample.sourceName)}</a>
                         ) : (
                           sanitizeDisplayText(sample.sourceName)
                         )}
@@ -859,6 +1019,19 @@ export default function App() {
 
   const ratio = targetInCny > 0 ? currentInCny / targetInCny : 0;
 
+  const categoryComparisonRows = useMemo(() => {
+    if (!currentCity || !targetCity) return [];
+    return buildCategoryComparisonRows(categoryOrder, groupedItems, currentCity, targetCity, frequencies, rates);
+  }, [categoryOrder, groupedItems, currentCity, targetCity, frequencies, rates]);
+
+  const topGapRows = useMemo(() => {
+    if (!currentCity || !targetCity) return [];
+    return buildTopGapRows(selectedItems, currentCity, targetCity, frequencies, rates);
+  }, [selectedItems, currentCity, targetCity, frequencies, rates]);
+
+  const chartMaxTotal = Math.max(currentInCny, targetInCny, 1);
+  const chartMaxCategory = Math.max(...categoryComparisonRows.map((row) => row.maxCny), 1);
+
   const fxPreview = currentCurrency && targetCurrency && currentCurrency !== targetCurrency
     ? convertCurrency(1, currentCurrency, targetCurrency, rates)
     : null;
@@ -911,9 +1084,9 @@ export default function App() {
   return (
     <main className="page">
       <header className="topbar">
-        <div className="brand-mark" aria-label="SameLife V0.7-Final">
+        <div className="brand-mark" aria-label="SameLife V0.71-One">
           <span className="brand-name">SameLife</span>
-          <span className="version-pill">V0.7-Final</span>
+          <span className="version-pill">V0.71-One</span>
         </div>
         <label className="language-switcher">
           <span>{t(language, "language")}</span>
@@ -1066,7 +1239,7 @@ export default function App() {
           <div className={`source-note ${dataSource !== "sl_official" ? "warning" : ""}`}>
             {dataSource !== "sl_official"
               ? t(language, "sourcePending")
-              : `${t(language, "sourceReadyPrefix")} ${resolvedDataCount} ${t(language, "sourceReadySuffix")}`}
+              : `${t(language, "sourceReadyPrefix")}${DATASET_FILE_SUMMARY}${t(language, "sourceReadyMiddle")} ${resolvedDataCount} ${t(language, "sourceReadySuffix")}`}
           </div>
 <div className="category-picker horizontal">
             {Object.entries(CATEGORY_META).map(([category, meta]) => (
@@ -1246,14 +1419,63 @@ export default function App() {
             })}
           </section>
 
-          <section className="panel placeholder-grid">
-            <div className="placeholder-card">
-              <h2>{t(language, "chartPlaceholder")}</h2>
-              <p>{t(language, "chartPlaceholderBody")}</p>
+          <section className="panel chart-panel">
+            <div className="section-head">
+              <div>
+                <span className="eyebrow">{t(language, "chartPlaceholder")}</span>
+                <h2>{t(language, "chartTotalComparison")}</h2>
+                <p className="hint">{t(language, "chartPlaceholderBody")}</p>
+              </div>
             </div>
-            <div className="placeholder-card">
-              <h2>{t(language, "advicePlaceholder")}</h2>
-              <p>{t(language, "advicePlaceholderBody")}</p>
+
+            <div className="total-chart">
+              <div className="total-bar-row">
+                <span>{cityText(currentCity, language)}</span>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: `${Math.max(4, (currentInCny / chartMaxTotal) * 100)}%` }} />
+                </div>
+                <strong>{formatMoney(currentInCny, "CNY")}</strong>
+              </div>
+              <div className="total-bar-row">
+                <span>{cityText(targetCity, language)}</span>
+                <div className="bar-track">
+                  <div className="bar-fill alt" style={{ width: `${Math.max(4, (targetInCny / chartMaxTotal) * 100)}%` }} />
+                </div>
+                <strong>{formatMoney(targetInCny, "CNY")}</strong>
+              </div>
+            </div>
+
+            <div className="chart-grid">
+              <div className="chart-card">
+                <h3>{t(language, "chartCategoryComparison")}</h3>
+                <div className="category-chart">
+                  {categoryComparisonRows.map((row) => (
+                    <div className="mini-chart-row" key={row.category}>
+                      <span>{categoryText(row.category, language).label}</span>
+                      <div className="dual-bars">
+                        <div className="mini-bar current" style={{ width: `${Math.max(3, (row.currentCny / chartMaxCategory) * 100)}%` }} title={`${cityText(currentCity, language)} ${formatMoney(row.currentCny, "CNY")}`} />
+                        <div className="mini-bar target" style={{ width: `${Math.max(3, (row.targetCny / chartMaxCategory) * 100)}%` }} title={`${cityText(targetCity, language)} ${formatMoney(row.targetCny, "CNY")}`} />
+                      </div>
+                      <strong>{formatMoney(row.currentCny, "CNY")} / {formatMoney(row.targetCny, "CNY")}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="chart-card">
+                <h3>{t(language, "chartTopGap")}</h3>
+                <div className="gap-list">
+                  {topGapRows.map((row) => (
+                    <div className="gap-item" key={row.item.id}>
+                      <div>
+                        <strong>{itemText(row.item, language).name}</strong>
+                        <span>{formatMoney(row.currentCny, "CNY")} / {formatMoney(row.targetCny, "CNY")}</span>
+                      </div>
+                      <b>{formatMoney(row.gap, "CNY")}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
 
